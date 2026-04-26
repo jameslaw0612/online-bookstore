@@ -1,0 +1,80 @@
+.landing-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #fff;
+  padding: 1.5rem;
+}
+
+.landing-content {
+  text-align: center;
+  color: #222;
+  max-width: 600px;
+}
+
+.landing-content h1 {
+  font-size: 3.5rem;
+  margin-bottom: 0.75rem;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  color: #111;
+}
+
+.landing-logo {
+  max-width: 400px;
+  width: 100%;
+  height: auto;
+  margin-bottom: 0.75rem;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.landing-content p {
+  font-size: 1.15rem;
+  color: #666;
+  margin-bottom: 2.5rem;
+  line-height: 1.6;
+}
+
+.landing-buttons {
+  display: flex;
+  gap: 1.25rem;
+  justify-content: center;
+}
+
+.btn {
+  padding: 0.85rem 2rem;
+  font-size: 1rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.2s ease;
+  font-weight: 700;
+}
+
+.btn-primary {
+  background-color: #20365f;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #162a4b;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(32, 54, 95, 0.2);
+}
+
+.btn-secondary {
+  background-color: #fff;
+  color: #20365f;
+  border-color: #20365f;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #fafafa;
+  color: #20365f;
+  transform: translateY(-2px);
+}
