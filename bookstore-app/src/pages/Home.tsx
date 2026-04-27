@@ -75,14 +75,30 @@ export default function Home() {
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
 
   /**
-   * Load user data from localStorage on mount
+   * Handle book card click - fetch fresh book data and open modal
    */
-  useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
+  const handleBookSelect = async (book: Book) => {
+    try {
+      const response = await fetch(`/backend/get-book-by-id.php?book_id=${book.book_id}`);
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.book) {
+        setSelectedBook(data.book);
+      } else {
+        // Fallback: use the book from the list if endpoint fails
+        setSelectedBook(book);
+      }
+    } catch (err) {
+      console.error('Error loading book details:', err);
+      // Fallback: use the book from the list if endpoint fails
+      setSelectedBook(book);
     }
-  }, []);
+  };
 
   /**
    * Fetch books and categories on mount
@@ -399,7 +415,7 @@ export default function Home() {
                   <div 
                     key={book.book_id} 
                     className="book-card"
-                    onClick={() => setSelectedBook(book)}
+                    onClick={() => handleBookSelect(book)}
                     style={{ cursor: 'pointer' }}
                   >
                     <div className="book-cover-wrap">
@@ -429,7 +445,7 @@ export default function Home() {
                   <div 
                     key={book.book_id} 
                     className="book-list-item"
-                    onClick={() => setSelectedBook(book)}
+                    onClick={() => handleBookSelect(book)}
                     style={{ cursor: 'pointer' }}
                   >
                     <div className="book-list-cover-wrap">

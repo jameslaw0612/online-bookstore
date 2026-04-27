@@ -372,25 +372,63 @@ export default function ManageBooks() {
   };
 
   /**
-   * Open edit mode with current book data
+   * Open edit mode with fresh book data from backend
    */
-  const openEditMode = (book: Book) => {
-    setEditingBook(book);
-    setEditTitle(book.title);
-    setEditAuthor(book.author);
-    setEditDescription(book.description);
-    setEditIsbn(book.isbn);
-    setEditPrice(book.price.toString());
-    setEditStockQuantity(book.stock_quantity.toString());
-    setEditBookCoverImage(book.book_cover_image ? `/backend/uploads/books/${book.book_cover_image}` : null);
+  const openEditMode = async (book: Book) => {
+    try {
+      // Fetch fresh book data including categories
+      const response = await fetch(`/backend/get-book-by-id.php?book_id=${book.book_id}`);
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
 
-    // Initialize image positioning to defaults
-    setEditImageScale(1);
-    setEditImageOffsetX(0);
-    setEditImageOffsetY(0);
+      const data = await response.json();
 
-    // Fetch existing categories for this book
-    fetchBookCategories(book.book_id);
+      if (data.success && data.book) {
+        const freshBook = data.book;
+        
+        setEditingBook(freshBook);
+        setEditTitle(freshBook.title);
+        setEditAuthor(freshBook.author);
+        setEditDescription(freshBook.description);
+        setEditIsbn(freshBook.isbn);
+        setEditPrice(freshBook.price.toString());
+        setEditStockQuantity(freshBook.stock_quantity.toString());
+        setEditBookCoverImage(freshBook.book_cover_image ? `/backend/uploads/books/${freshBook.book_cover_image}` : null);
+
+        // Initialize image positioning to defaults
+        setEditImageScale(1);
+        setEditImageOffsetX(0);
+        setEditImageOffsetY(0);
+
+        // Extract category IDs from the book data
+        if (freshBook.categories && Array.isArray(freshBook.categories)) {
+          const categoryIds = freshBook.categories.map((cat: any) => cat.category_id);
+          setEditSelectedCategories(categoryIds);
+        }
+      } else {
+        console.error('Failed to load book details');
+        setError('Failed to load book details');
+      }
+    } catch (err) {
+      console.error('Error loading book for edit:', err);
+      // Fallback: use the book data from the list if endpoint fails
+      setEditingBook(book);
+      setEditTitle(book.title);
+      setEditAuthor(book.author);
+      setEditDescription(book.description);
+      setEditIsbn(book.isbn);
+      setEditPrice(book.price.toString());
+      setEditStockQuantity(book.stock_quantity.toString());
+      setEditBookCoverImage(book.book_cover_image ? `/backend/uploads/books/${book.book_cover_image}` : null);
+
+      setEditImageScale(1);
+      setEditImageOffsetX(0);
+      setEditImageOffsetY(0);
+
+      fetchBookCategories(book.book_id);
+    }
   };
 
   /**
