@@ -75,6 +75,20 @@ export default function Home() {
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
 
   /**
+   * Load user info from localStorage for navbar greeting
+   */
+  useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  }, []);
+
+  /**
    * Handle book card click - fetch fresh book data and open modal
    */
   const handleBookSelect = async (book: Book) => {
@@ -210,10 +224,29 @@ export default function Home() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
-    navigate('/login');
+  const handleLogout = async () => {
+    const token = localStorage.getItem('authToken');
+
+    try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      await fetch('/backend/logout.php', {
+        method: 'POST',
+        headers,
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('user');
+      navigate('/login');
+    }
   };
 
   return (

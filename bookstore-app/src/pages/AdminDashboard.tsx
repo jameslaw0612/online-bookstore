@@ -58,10 +58,29 @@ export default function AdminDashboard() {
   /**
    * LOGOUT HANDLER
    */
-  const handleLogout = () => {
-    localStorage.removeItem('adminAuthToken');
-    localStorage.removeItem('admin');
-    navigate('/admin/login');
+  const handleLogout = async () => {
+    const token = localStorage.getItem('adminAuthToken');
+
+    try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      await fetch('/backend/logout.php', {
+        method: 'POST',
+        headers,
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('adminAuthToken');
+      localStorage.removeItem('admin');
+      navigate('/admin/login');
+    }
   };
 
   const handleNavigation = (path: string) => {

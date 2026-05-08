@@ -36,6 +36,20 @@ export default function Login() {
   
   const navigate = useNavigate();  // Use React Router hook to navigate
 
+  const parseJsonResponse = async (response: Response) => {
+    const rawText = await response.text();
+
+    try {
+      return JSON.parse(rawText);
+    } catch {
+      if (rawText.trim().startsWith('<!doctype') || rawText.trim().startsWith('<html')) {
+        throw new Error('Backend returned HTML instead of JSON. Check if the PHP server is running and the Vite proxy is pointing to the correct backend URL.');
+      }
+
+      throw new Error(`Backend returned an invalid response: ${rawText.slice(0, 120)}`);
+    }
+  };
+
   /**
    * USER LOGIN SUBMISSION HANDLER
    * Sends user login credentials to backend/login.php
@@ -52,11 +66,11 @@ export default function Login() {
         body: JSON.stringify({ email: userEmail, password: userPassword }),
       });
 
-      const data = await response.json();
+      const data = await parseJsonResponse(response);
 
-      if (data.success) {
+      if (data.success && data.token) {
         // Store user authentication token and data
-        localStorage.setItem('authToken', data.token || userEmail);
+        localStorage.setItem('authToken', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         
         // Show success animation and wait 1 second
@@ -64,11 +78,13 @@ export default function Login() {
         setTimeout(() => {
           navigate('/home');
         }, 1000);
+      } else if (data.success) {
+        setUserError('Login succeeded but no session token was returned.');
       } else {
         setUserError(data.message || 'Login failed');
       }
     } catch (error) {
-      setUserError('An error occurred. Please try again.');
+      setUserError(error instanceof Error ? error.message : 'An error occurred. Please try again.');
       console.error('Error:', error);
     } finally {
       setUserLoading(false);
@@ -91,11 +107,11 @@ export default function Login() {
         body: JSON.stringify({ email: adminEmail, password: adminPassword }),
       });
 
-      const data = await response.json();
+      const data = await parseJsonResponse(response);
 
-      if (data.success) {
+      if (data.success && data.token) {
         // Store admin authentication token and data
-        localStorage.setItem('adminAuthToken', data.token || adminEmail);
+        localStorage.setItem('adminAuthToken', data.token);
         localStorage.setItem('admin', JSON.stringify(data.admin));
         
         // Show success animation and wait 1 second
@@ -103,11 +119,13 @@ export default function Login() {
         setTimeout(() => {
           navigate('/admin/dashboard');
         }, 1000);
+      } else if (data.success) {
+        setAdminError('Login succeeded but no session token was returned.');
       } else {
         setAdminError(data.message || 'Login failed');
       }
     } catch (error) {
-      setAdminError('An error occurred. Please try again.');
+      setAdminError(error instanceof Error ? error.message : 'An error occurred. Please try again.');
       console.error('Error:', error);
     } finally {
       setAdminLoading(false);

@@ -47,10 +47,10 @@ export default function AdminLogin() {
       const data = await response.json();
 
       // Check if login was successful
-      if (data.success) {
+      if (data.success && data.token) {
         // Use localStorage (browser storage API) to store admin authentication token
         // Persists across page refreshes and browser sessions
-        localStorage.setItem('adminAuthToken', data.token || email);
+        localStorage.setItem('adminAuthToken', data.token);
         
         // Use JSON.stringify() to convert admin object to JSON string for storage
         // Store admin information (name, email, role) in localStorage
@@ -58,6 +58,8 @@ export default function AdminLogin() {
         
         // Use navigate() to redirect admin to the protected /admin/dashboard page
         navigate('/admin/dashboard');
+      } else if (data.success) {
+        setError('Login succeeded but no session token was returned.');
       } else {
         // If login failed, display backend error message
         setError(data.message || 'Login failed');

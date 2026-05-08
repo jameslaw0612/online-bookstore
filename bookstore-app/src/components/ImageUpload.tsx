@@ -40,7 +40,7 @@ interface ImageUploadProps {
   initialScale?: number; // Load with specific zoom level
   initialOffsetX?: number; // Load with specific pan X
   initialOffsetY?: number; // Load with specific pan Y
-  initialImage?: string; // Load with existing image (base64 or URL)
+  initialImage?: string | null; // Load with existing image (base64 or URL)
   initialIsAlreadyCropped?: boolean; // If true, show cropped preview state immediately
 }
 
