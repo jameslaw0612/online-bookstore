@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BookOpen, ClipboardList } from 'lucide-react';
+import { BookOpen, ClipboardList, LogOut } from 'lucide-react';
 import ManageBooks from './ManageBooks';
 import '../styles/AdminDashboard.css';
 import sideLogo from '../assets/Web_Logo/side version.png';
@@ -127,6 +127,7 @@ export default function AdminDashboard() {
               <span className="admin-role">{admin.role}</span>
             </div>
             <button onClick={handleLogout} className="btn-logout">
+              <LogOut size={18} />
               Logout
             </button>
           </div>

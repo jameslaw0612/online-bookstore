@@ -51,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
         require_once 'db.php';
+        require_once 'book-image-storage.php';
 
         // Get book_id from query parameters
         $book_id = isset($_GET['book_id']) ? intval($_GET['book_id']) : null;
@@ -106,6 +107,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $book['book_id'] = intval($book['book_id']);
         $book['price'] = floatval($book['price']);
         $book['stock_quantity'] = intval($book['stock_quantity']);
+
+        $imageState = getBookImageState($book['book_id']);
+        $book['book_cover_original_image'] = $imageState['book_cover_original_image'];
+        $book['image_scale'] = $imageState['image_scale'];
+        $book['image_offset_x'] = $imageState['image_offset_x'];
+        $book['image_offset_y'] = $imageState['image_offset_y'];
 
         // Fetch categories for this book
         $catStmt = $conn->prepare("

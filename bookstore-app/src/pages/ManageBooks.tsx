@@ -27,6 +27,11 @@ interface Book {
   price: number;
   stock_quantity: number;
   book_cover_image?: string;
+  book_cover_original_image?: string | null;
+  image_scale?: number;
+  image_offset_x?: number;
+  image_offset_y?: number;
+  categories?: Category[];
 }
 
 export default function ManageBooks() {
@@ -39,9 +44,10 @@ export default function ManageBooks() {
   const [stockQuantity, setStockQuantity] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [bookCoverImage, setBookCoverImage] = useState<string | null>(null);
-  const [, setImageScale] = useState(1);
-  const [, setImageOffsetX] = useState(0);
-  const [, setImageOffsetY] = useState(0);
+  const [originalBookCoverImage, setOriginalBookCoverImage] = useState<string | null>(null);
+  const [imageScale, setImageScale] = useState(1);
+  const [imageOffsetX, setImageOffsetX] = useState(0);
+  const [imageOffsetY, setImageOffsetY] = useState(0);
 
   // UI state
   const [categories, setCategories] = useState<Category[]>([]);
@@ -68,6 +74,7 @@ export default function ManageBooks() {
   const [editStockQuantity, setEditStockQuantity] = useState('');
   const [editSelectedCategories, setEditSelectedCategories] = useState<number[]>([]);
   const [editBookCoverImage, setEditBookCoverImage] = useState<string | null>(null);
+  const [editOriginalBookCoverImage, setEditOriginalBookCoverImage] = useState<string | null>(null);
   const [editImageScale, setEditImageScale] = useState(1);
   const [editImageOffsetX, setEditImageOffsetX] = useState(0);
   const [editImageOffsetY, setEditImageOffsetY] = useState(0);
@@ -250,6 +257,10 @@ export default function ManageBooks() {
           stock_quantity: parseInt(stockQuantity),
           category_ids: selectedCategories,
           book_cover_image: bookCoverImage,
+          book_cover_original_image: originalBookCoverImage ?? bookCoverImage,
+          image_scale: imageScale,
+          image_offset_x: imageOffsetX,
+          image_offset_y: imageOffsetY,
         }),
       });
 
@@ -267,6 +278,7 @@ export default function ManageBooks() {
         setStockQuantity('');
         setSelectedCategories([]);
         setBookCoverImage(null);
+        setOriginalBookCoverImage(null);
         setImageScale(1);
         setImageOffsetX(0);
         setImageOffsetY(0);
@@ -293,6 +305,13 @@ export default function ManageBooks() {
    */
   const handleImageSelect = (base64Image: string) => {
     setBookCoverImage(base64Image);
+  };
+
+  /**
+   * Keep a copy of the full uncropped image so future edits can reopen it.
+   */
+  const handleOriginalImageSelect = (base64Image: string) => {
+    setOriginalBookCoverImage(base64Image);
   };
 
   /**
@@ -396,11 +415,16 @@ export default function ManageBooks() {
         setEditPrice(freshBook.price.toString());
         setEditStockQuantity(freshBook.stock_quantity.toString());
         setEditBookCoverImage(freshBook.book_cover_image ? `/backend/uploads/books/${freshBook.book_cover_image}` : null);
+        setEditOriginalBookCoverImage(
+          freshBook.book_cover_original_image
+            ? `/backend/uploads/books/${freshBook.book_cover_original_image}`
+            : (freshBook.book_cover_image ? `/backend/uploads/books/${freshBook.book_cover_image}` : null)
+        );
 
-        // Initialize image positioning to defaults
-        setEditImageScale(1);
-        setEditImageOffsetX(0);
-        setEditImageOffsetY(0);
+        // Restore the saved crop positioning when reopening the editor
+        setEditImageScale(freshBook.image_scale ?? 1);
+        setEditImageOffsetX(freshBook.image_offset_x ?? 0);
+        setEditImageOffsetY(freshBook.image_offset_y ?? 0);
 
         // Extract category IDs from the book data
         if (freshBook.categories && Array.isArray(freshBook.categories)) {
@@ -422,10 +446,15 @@ export default function ManageBooks() {
       setEditPrice(book.price.toString());
       setEditStockQuantity(book.stock_quantity.toString());
       setEditBookCoverImage(book.book_cover_image ? `/backend/uploads/books/${book.book_cover_image}` : null);
+      setEditOriginalBookCoverImage(
+        book.book_cover_original_image
+          ? `/backend/uploads/books/${book.book_cover_original_image}`
+          : (book.book_cover_image ? `/backend/uploads/books/${book.book_cover_image}` : null)
+      );
 
-      setEditImageScale(1);
-      setEditImageOffsetX(0);
-      setEditImageOffsetY(0);
+      setEditImageScale(book.image_scale ?? 1);
+      setEditImageOffsetX(book.image_offset_x ?? 0);
+      setEditImageOffsetY(book.image_offset_y ?? 0);
 
       fetchBookCategories(book.book_id);
     }
@@ -476,6 +505,7 @@ export default function ManageBooks() {
     setEditPrice('');
     setEditStockQuantity('');
     setEditBookCoverImage(null);
+    setEditOriginalBookCoverImage(null);
     setEditSelectedCategories([]);
     setEditImageScale(1);
     setEditImageOffsetX(0);
@@ -499,6 +529,10 @@ export default function ManageBooks() {
    */
   const handleEditImageSelect = (base64Image: string) => {
     setEditBookCoverImage(base64Image);
+  };
+
+  const handleEditOriginalImageSelect = (base64Image: string) => {
+    setEditOriginalBookCoverImage(base64Image);
   };
 
   /**
@@ -541,6 +575,10 @@ export default function ManageBooks() {
           stock_quantity: parseInt(editStockQuantity),
           category_ids: editSelectedCategories,
           book_cover_image: editBookCoverImage,
+          book_cover_original_image: editOriginalBookCoverImage ?? editBookCoverImage,
+          image_scale: editImageScale,
+          image_offset_x: editImageOffsetX,
+          image_offset_y: editImageOffsetY,
         }),
       });
 
@@ -609,6 +647,7 @@ export default function ManageBooks() {
               <p className="section-description">Upload and adjust your book cover (Portrait: 4.13W × 6.38H)</p>
               <ImageUpload
                 onImageSelect={handleImageSelect}
+                onOriginalImageSelect={handleOriginalImageSelect}
                 onPositionChange={handleImagePositionChange}
                 maxWidth={260}
                 maxHeight={400}
@@ -844,11 +883,13 @@ export default function ManageBooks() {
                   <p className="section-description">Update your book cover (Portrait: 4.13W × 6.38H)</p>
                   <ImageUpload
                     onImageSelect={handleEditImageSelect}
+                    onOriginalImageSelect={handleEditOriginalImageSelect}
                     onPositionChange={handleEditImagePositionChange}
                     maxWidth={260}
                     maxHeight={400}
                     resetTrigger={editImageResetTrigger}
                     initialImage={editingBook?.book_cover_image ? `/backend/uploads/books/${editingBook.book_cover_image}` : undefined}
+                    initialOriginalImage={editOriginalBookCoverImage}
                     initialScale={editImageScale}
                     initialOffsetX={editImageOffsetX}
                     initialOffsetY={editImageOffsetY}

@@ -47,7 +47,7 @@ export default function BookDetailsModal({ book, isOpen, onClose, allBooks, onSe
       .sort((a, b) => b.sharedCount - a.sharedCount) // Higher shared count comes first
       .map(m => m.book);
     
-    return matches.slice(0, 4);
+    return matches.slice(0, 3);
   }, [book, allBooks]);
 
   // Reset quantity when a new book is opened

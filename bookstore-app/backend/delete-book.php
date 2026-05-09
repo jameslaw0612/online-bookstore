@@ -15,6 +15,7 @@
  */
 
 require_once 'db.php';
+require_once 'book-image-storage.php';
 
 // Handle CORS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -61,6 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $book_title = $book['title_fld'];
         $book_cover_image = $book['book_cover_image'];
+        $imageState = getBookImageState($book_id);
+        $book_cover_original_image = $imageState['book_cover_original_image'] ?? null;
 
         /**
          * STEP 3: Delete book-category associations
@@ -91,16 +94,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /**
          * STEP 5: Delete book cover image file
          */
-        if ($book_cover_image && file_exists(__DIR__ . '/uploads/books/' . $book_cover_image)) {
-            error_log("Deleting image file: " . $book_cover_image);
-            
-            if (unlink(__DIR__ . '/uploads/books/' . $book_cover_image)) {
-                error_log("Image file deleted successfully");
-            } else {
-                error_log("Warning: Failed to delete image file: " . $book_cover_image);
-                // Don't fail the request if image deletion fails
-            }
-        }
+        deleteBookImageFile($book_cover_image);
+        deleteBookImageFile($book_cover_original_image);
+        deleteBookImageState($book_id);
 
         /**
          * STEP 6: Return success response

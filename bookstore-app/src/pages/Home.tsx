@@ -10,18 +10,12 @@
  */
 
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Book, BookX, LayoutGrid, List, Search, X } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Book, BookX, ChevronRight, LayoutGrid, List } from 'lucide-react';
 import BookDetailsModal from '../components/BookDetailsModal';
+import UserCartDrawer from '../components/UserCartDrawer';
+import UserTopBar from '../components/UserTopBar';
 import '../styles/Home.css';
-import sideLogo from '../assets/Web_Logo/side version.png';
-
-// TypeScript interfaces
-interface User {
-  fname: string;
-  lname: string;
-  email: string;
-}
 
 interface BookCategory {
   category_id: number;
@@ -46,9 +40,7 @@ interface Category {
 }
 
 export default function Home() {
-  // User state
-  const [user, setUser] = useState<User | null>(null);
-  const navigate = useNavigate();
+  const location = useLocation();
 
   // Books & categories state
   const [books, setBooks] = useState<Book[]>([]);
@@ -65,6 +57,7 @@ export default function Home() {
   // Sort & display state
   const [sortBy, setSortBy] = useState('latest');
   const [showCount, setShowCount] = useState(8);
+  const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Search state
@@ -73,20 +66,7 @@ export default function Home() {
 
   // Modal state
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
-
-  /**
-   * Load user info from localStorage for navbar greeting
-   */
-  useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    }
-  }, []);
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   /**
    * Handle book card click - fetch fresh book data and open modal
@@ -155,6 +135,12 @@ export default function Home() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const queryFromUrl = new URLSearchParams(location.search).get('search') ?? '';
+    setSearchQuery(queryFromUrl);
+    setAppliedSearchQuery(queryFromUrl);
+  }, [location.search]);
+
   /**
    * Filter and sort books
    */
@@ -195,8 +181,41 @@ export default function Home() {
         break;
     }
 
-    return result.slice(0, showCount);
-  }, [books, selectedCategories, filterPriceMin, filterPriceMax, sortBy, showCount, appliedSearchQuery]);
+    return result;
+  }, [books, selectedCategories, filterPriceMin, filterPriceMax, sortBy, appliedSearchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredBooks.length / showCount));
+
+  const paginatedBooks = useMemo(() => {
+    const startIndex = (currentPage - 1) * showCount;
+    return filteredBooks.slice(startIndex, startIndex + showCount);
+  }, [currentPage, filteredBooks, showCount]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategories, filterPriceMin, filterPriceMax, sortBy, appliedSearchQuery, showCount]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const getVisiblePageItems = () => {
+    if (totalPages <= 8) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 'ellipsis', totalPages - 2, totalPages - 1, totalPages];
+    }
+
+    if (currentPage >= totalPages - 3) {
+      return [1, 2, 3, 'ellipsis', totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+
+    return [1, 'ellipsis', currentPage - 1, currentPage, currentPage + 1, 'ellipsis', totalPages];
+  };
 
   const handleCategoryToggle = (categoryId: number) => {
     setSelectedCategories(prev =>
@@ -215,93 +234,23 @@ export default function Home() {
   };
 
   const handleSearchSubmit = () => {
-    setAppliedSearchQuery(searchQuery);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearchSubmit();
-    }
-  };
-
-  const handleLogout = async () => {
-    const token = localStorage.getItem('authToken');
-
-    try {
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
-      await fetch('/backend/logout.php', {
-        method: 'POST',
-        headers,
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
-      navigate('/login');
-    }
+    setAppliedSearchQuery(searchQuery.trim());
   };
 
   return (
     <div className="home-container">
-      {/* NAVIGATION BAR */}
-      <nav className="navbar">
-        <div className="nav-content">
-          <h1 className="logo" style={{ height: '70px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
-            <img src={sideLogo} alt="Bookstore Logo" className="logo-image" style={{ height: '140px', objectFit: 'contain' }} />
-          </h1>
-
-          <div className="nav-center">
-            <div className="search-bar-container">
-              <input
-                type="text"
-                placeholder="Search products..."
-                className="search-input"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={handleKeyDown}
-              />
-              <div className="search-actions">
-                {(searchQuery || appliedSearchQuery) && (
-                  <button
-                    className="clear-search-btn"
-                    onClick={() => {
-                      setSearchQuery('');
-                      setAppliedSearchQuery('');
-                    }}
-                    title="Clear search"
-                  >
-                    <X size={18} />
-                  </button>
-                )}
-                <button
-                  className="search-submit-btn"
-                  onClick={handleSearchSubmit}
-                >
-                  <Search size={20} />
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="nav-right">
-            {user && (
-              <span className="welcome-text">
-                Welcome, {user.fname}!
-              </span>
-            )}
-            <button onClick={handleLogout} className="btn-logout">
-              Logout
-            </button>
-          </div>
-        </div>
-      </nav>
+      <UserTopBar
+        activeNav="home"
+        cartOpen={isCartOpen}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSearchSubmit={handleSearchSubmit}
+        onSearchClear={() => {
+          setSearchQuery('');
+          setAppliedSearchQuery('');
+        }}
+        onCartClick={() => setIsCartOpen(prev => !prev)}
+      />
 
       {/* MAIN CONTENT */}
       <main className="home-main">
@@ -366,9 +315,6 @@ export default function Home() {
                 <p className="price-display">
                   Price: <span className="price-val">₱{filterPriceMin.toLocaleString()}</span> — <span className="price-val">₱{filterPriceMax.toLocaleString()}</span>
                 </p>
-                <button type="button" className="filter-link-btn">
-                  FILTER
-                </button>
               </div>
             </div>
 
@@ -444,7 +390,7 @@ export default function Home() {
               </div>
             ) : viewMode === 'grid' ? (
               <div className="books-grid">
-                {filteredBooks.map(book => (
+                {paginatedBooks.map(book => (
                   <div 
                     key={book.book_id} 
                     className="book-card"
@@ -474,7 +420,7 @@ export default function Home() {
               </div>
             ) : (
               <div className="books-list">
-                {filteredBooks.map(book => (
+                {paginatedBooks.map(book => (
                   <div 
                     key={book.book_id} 
                     className="book-list-item"
@@ -504,6 +450,37 @@ export default function Home() {
                 ))}
               </div>
             )}
+
+            {!loading && filteredBooks.length > 0 && totalPages > 1 && (
+              <div className="catalog-pagination">
+                <div className="pagination-pages">
+                  {getVisiblePageItems().map((item, index) => (
+                    item === 'ellipsis' ? (
+                      <span key={`ellipsis-${index}`} className="pagination-ellipsis">...</span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        className={`pagination-page ${currentPage === item ? 'active' : ''}`}
+                        onClick={() => setCurrentPage(item as number)}
+                      >
+                        {item}
+                      </button>
+                    )
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  className="pagination-next"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  <span>NEXT</span>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
           </section>
         </div>
       </main>
@@ -516,6 +493,7 @@ export default function Home() {
         allBooks={books}
         onSelectBook={setSelectedBook}
       />
+      <UserCartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
     </div>
   );
 }

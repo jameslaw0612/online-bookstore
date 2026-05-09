@@ -18,6 +18,7 @@
  */
 
 require_once 'db.php';
+require_once 'book-image-storage.php';
 
 // Handle CORS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -53,7 +54,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $price = floatval($data['price']);
         $stock_quantity = intval($data['stock_quantity']);
         $category_ids = is_array($data['category_ids']) ? $data['category_ids'] : [];
-        $book_cover_image = $data['book_cover_image'] ?? null; // Can be null or base64
+        $book_cover_image = $data['book_cover_image'] ?? null; // Can be null, URL, filename, or base64
+        $book_cover_original_image = $data['book_cover_original_image'] ?? null;
+        $image_scale = isset($data['image_scale']) ? floatval($data['image_scale']) : 1.0;
+        $image_offset_x = isset($data['image_offset_x']) ? floatval($data['image_offset_x']) : 0.0;
+        $image_offset_y = isset($data['image_offset_y']) ? floatval($data['image_offset_y']) : 0.0;
 
         // Validate category_ids is not empty
         if (empty($category_ids)) {
@@ -81,56 +86,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $existingBook = $checkStmt->fetch(PDO::FETCH_ASSOC);
         $existing_image = $existingBook['book_cover_image'];
+        $existingImageState = getBookImageState($book_id);
+        $existing_original_image = $existingImageState['book_cover_original_image'] ?? null;
         $image_filename = $existing_image;
+        $original_image_filename = $existing_original_image ?: $existing_image;
+        $replaced_cropped_image = false;
+        $replaced_original_image = false;
 
         /**
          * STEP 3: Process and save new book cover image if provided
          */
         if ($book_cover_image && is_string($book_cover_image) && strpos($book_cover_image, 'data:image') === 0) {
             error_log("Processing new base64 image...");
-            
-            // Extract base64 data and file type
-            preg_match('/data:image\/(\w+);base64,/', $book_cover_image, $matches);
-            $image_type = $matches[1] ?? 'jpg';
-            
-            // Extract base64 content
-            $base64_data = substr($book_cover_image, strpos($book_cover_image, ',') + 1);
-            $image_data = base64_decode($base64_data, true);
-            
-            if ($image_data === false) {
-                throw new Exception("Failed to decode base64 image data");
+            $image_filename = saveBase64BookImage($book_cover_image, 'book');
+            $replaced_cropped_image = true;
+            error_log("Successfully saved new cropped image: $image_filename");
+        } else {
+            $requested_cropped_filename = extractBookImageFilename(is_string($book_cover_image) ? $book_cover_image : null);
+            if ($requested_cropped_filename) {
+                $image_filename = $requested_cropped_filename;
             }
-            
-            // Create uploads directory if it doesn't exist
-            $uploads_dir = __DIR__ . '/uploads/books';
-            if (!is_dir($uploads_dir)) {
-                if (!mkdir($uploads_dir, 0777, true)) {
-                    throw new Exception("Failed to create uploads directory: $uploads_dir");
-                }
-                error_log("Created uploads directory: $uploads_dir");
-            }
-            
-            // Generate unique filename
-            $image_filename = 'book_' . time() . '_' . bin2hex(random_bytes(8)) . '.' . $image_type;
-            $image_path = $uploads_dir . '/' . $image_filename;
-            
-            error_log("Saving new image to: $image_path");
-            
-            // Save image file
-            if (file_put_contents($image_path, $image_data) === false) {
-                throw new Exception("Failed to save book cover image to: $image_path");
-            }
-            
-            error_log("Successfully saved new image: $image_filename");
-            
-            // Delete old image file if it exists
-            if ($existing_image && file_exists($uploads_dir . '/' . $existing_image)) {
-                error_log("Deleting old image file: " . $existing_image);
-                if (unlink($uploads_dir . '/' . $existing_image)) {
-                    error_log("Old image file deleted successfully");
-                } else {
-                    error_log("Warning: Failed to delete old image file: " . $existing_image);
-                }
+        }
+
+        if ($book_cover_original_image && is_string($book_cover_original_image) && strpos($book_cover_original_image, 'data:image') === 0) {
+            error_log("Processing new original base64 image...");
+            $original_image_filename = saveBase64BookImage($book_cover_original_image, 'book_original');
+            $replaced_original_image = true;
+            error_log("Successfully saved new original image: $original_image_filename");
+        } else {
+            $requested_original_filename = extractBookImageFilename(is_string($book_cover_original_image) ? $book_cover_original_image : null);
+            if ($requested_original_filename) {
+                $original_image_filename = $requested_original_filename;
             }
         }
 
@@ -185,6 +171,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         error_log("Book updated in database");
+
+        setBookImageState(
+            $book_id,
+            $original_image_filename,
+            $image_scale,
+            $image_offset_x,
+            $image_offset_y
+        );
+
+        if (
+            $replaced_cropped_image &&
+            $existing_image &&
+            $existing_image !== $image_filename &&
+            $existing_image !== $original_image_filename
+        ) {
+            deleteBookImageFile($existing_image);
+        }
+
+        if ($replaced_original_image && $existing_original_image && $existing_original_image !== $original_image_filename) {
+            deleteBookImageFile($existing_original_image);
+        }
 
         /**
          * STEP 5: Update book-category associations
@@ -256,7 +263,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'price' => $price,
                 'stock_quantity' => $stock_quantity,
                 'category_ids' => $category_ids,
-                'book_cover_image' => $image_filename
+                'book_cover_image' => $image_filename,
+                'book_cover_original_image' => $original_image_filename,
+                'image_scale' => $image_scale,
+                'image_offset_x' => $image_offset_x,
+                'image_offset_y' => $image_offset_y
             ]
         ]);
 

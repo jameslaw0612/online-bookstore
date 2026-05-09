@@ -12,7 +12,7 @@
  */
 
 import { useRef, useState, useEffect } from 'react';
-import { 
+import {
   UploadCloud, 
   RefreshCw, 
   Camera, 
@@ -30,6 +30,29 @@ import {
 } from 'lucide-react';
 import '../styles/ImageUpload.css';
 
+const loadImageAsDataUrl = async (imageSource: string) => {
+  if (imageSource.startsWith('data:')) {
+    return imageSource;
+  }
+
+  const urlParts = imageSource.split('/');
+  const filename = urlParts[urlParts.length - 1];
+  const imageUrl = `/backend/get-book-image.php?file=${encodeURIComponent(filename)}`;
+  const response = await fetch(imageUrl);
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+};
+
 interface ImageUploadProps {
   onImageSelect: (base64Image: string) => void;
   onOriginalImageSelect?: (base64Image: string) => void;
@@ -41,6 +64,7 @@ interface ImageUploadProps {
   initialOffsetX?: number; // Load with specific pan X
   initialOffsetY?: number; // Load with specific pan Y
   initialImage?: string | null; // Load with existing image (base64 or URL)
+  initialOriginalImage?: string | null; // Load with existing uncropped image (base64 or URL)
   initialIsAlreadyCropped?: boolean; // If true, show cropped preview state immediately
 }
 
@@ -55,18 +79,26 @@ export default function ImageUpload({
   initialOffsetX = 0,
   initialOffsetY = 0,
   initialImage = null,
+  initialOriginalImage = null,
   initialIsAlreadyCropped = false
 }: ImageUploadProps) {
   // State management
   const [preview, setPreview] = useState<string | null>(null);
   const [originalPreview, setOriginalPreview] = useState<string | null>(null);
-  const [croppedPreview, setCroppedPreview] = useState<string | null>(initialIsAlreadyCropped && initialImage ? initialImage : null);
+  const [croppedPreview, setCroppedPreview] = useState<string | null>(null);
+  const [savedCroppedPreview, setSavedCroppedPreview] = useState<string | null>(null);
+  const [isLoadingInitialImage, setIsLoadingInitialImage] = useState(initialIsAlreadyCropped && !!initialImage);
+  const [isPreviewImageReady, setIsPreviewImageReady] = useState(false);
+  const [previewLoadError, setPreviewLoadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [cropWidth] = useState(maxWidth);
   const [cropHeight] = useState(maxHeight);
   const [scale, setScale] = useState(initialScale);
   const [offsetX, setOffsetX] = useState(initialOffsetX);
   const [offsetY, setOffsetY] = useState(initialOffsetY);
+  const [savedScale, setSavedScale] = useState(initialScale);
+  const [savedOffsetX, setSavedOffsetX] = useState(initialOffsetX);
+  const [savedOffsetY, setSavedOffsetY] = useState(initialOffsetY);
   const [isDragPanning, setIsDragPanning] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,33 +121,60 @@ export default function ImageUpload({
    * Load initial image from URL via proxy and convert to base64
    */
   useEffect(() => {
-    if (initialImage && !initialImage.startsWith('data:') && initialIsAlreadyCropped) {
-      // Extract filename from URL
-      const urlParts = initialImage.split('/');
-      const filename = urlParts[urlParts.length - 1];
+    let isCancelled = false;
 
-      // Load image via fetch (avoids crossOrigin/CORS issues entirely)
-      const imageUrl = `/backend/uploads/books/${encodeURIComponent(filename)}`;
+    const loadInitialImages = async () => {
+      if (!initialIsAlreadyCropped || !initialImage) {
+        if (!isCancelled) {
+          setIsLoadingInitialImage(false);
+        }
+        return;
+      }
 
-      fetch(imageUrl)
-        .then(response => {
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          return response.blob();
-        })
-        .then(blob => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64 = reader.result as string;
-            setCroppedPreview(base64);
-            setOriginalPreview(base64);
-          };
-          reader.readAsDataURL(blob);
-        })
-        .catch(err => {
-          console.error('Failed to load image:', imageUrl, err);
-        });
-    }
-  }, [initialImage, initialIsAlreadyCropped]);
+      if (!isCancelled) {
+        setIsLoadingInitialImage(true);
+      }
+
+      try {
+        const croppedBase64 = await loadImageAsDataUrl(initialImage);
+        if (!isCancelled) {
+          setCroppedPreview(croppedBase64);
+          setSavedCroppedPreview(croppedBase64);
+        }
+
+        if (initialOriginalImage) {
+          try {
+            const originalBase64 = await loadImageAsDataUrl(initialOriginalImage);
+            if (!isCancelled) {
+              setOriginalPreview(originalBase64);
+              if (onOriginalImageSelect) onOriginalImageSelect(originalBase64);
+            }
+          } catch (originalLoadError) {
+            console.warn('Falling back to cropped image because the saved original image could not be loaded.', originalLoadError);
+            if (!isCancelled) {
+              setOriginalPreview(croppedBase64);
+              if (onOriginalImageSelect) onOriginalImageSelect(croppedBase64);
+            }
+          }
+        } else if (!isCancelled) {
+          setOriginalPreview(croppedBase64);
+          if (onOriginalImageSelect) onOriginalImageSelect(croppedBase64);
+        }
+      } catch (err) {
+        console.error('Failed to load initial image data', err);
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingInitialImage(false);
+        }
+      }
+    };
+
+    void loadInitialImages();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [initialImage, initialOriginalImage, initialIsAlreadyCropped]);
 
   /**
    * Reset all state when resetTrigger changes
@@ -125,14 +184,39 @@ export default function ImageUpload({
       setPreview(null);
       setOriginalPreview(null);
       setCroppedPreview(null);
+      setSavedCroppedPreview(null);
+      setIsLoadingInitialImage(false);
+      setIsPreviewImageReady(false);
+      setPreviewLoadError(null);
       setScale(1);
       setOffsetX(0);
       setOffsetY(0);
+      setSavedScale(1);
+      setSavedOffsetX(0);
+      setSavedOffsetY(0);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
   }, [resetTrigger]);
+
+  useEffect(() => {
+    setScale(initialScale);
+    setOffsetX(initialOffsetX);
+    setOffsetY(initialOffsetY);
+    setSavedScale(initialScale);
+    setSavedOffsetX(initialOffsetX);
+    setSavedOffsetY(initialOffsetY);
+  }, [initialScale, initialOffsetX, initialOffsetY]);
+
+  useEffect(() => {
+    if (preview) {
+      setIsPreviewImageReady(false);
+      setPreviewLoadError(null);
+    } else {
+      setIsPreviewImageReady(false);
+    }
+  }, [preview]);
 
 
   /**
@@ -149,6 +233,14 @@ export default function ImageUpload({
       const result = e.target?.result as string;
       setPreview(result);
       setOriginalPreview(result);
+      setCroppedPreview(null);
+      setSavedCroppedPreview(null);
+      setIsLoadingInitialImage(false);
+      setIsPreviewImageReady(false);
+      setPreviewLoadError(null);
+      setSavedScale(1);
+      setSavedOffsetX(0);
+      setSavedOffsetY(0);
       if (onOriginalImageSelect) onOriginalImageSelect(result);
       setScale(1);
       setOffsetX(0);
@@ -279,12 +371,43 @@ export default function ImageUpload({
    * Preserves current positioning to allow fine-tuning
    */
   const handleRepositionImage = () => {
-    if (originalPreview) {
+    const imageToReposition = originalPreview || croppedPreview;
+    if (imageToReposition) {
       setCroppedPreview(null); // Clear cropped preview to show crop interface
-      setPreview(originalPreview);
+      setPreview(imageToReposition);
+      setScale(savedScale);
+      setOffsetX(savedOffsetX);
+      setOffsetY(savedOffsetY);
+      setIsPreviewImageReady(false);
+      setPreviewLoadError(null);
+      if (onPositionChange) {
+        onPositionChange({ scale: savedScale, offsetX: savedOffsetX, offsetY: savedOffsetY });
+      }
       // IMPORTANT: Keep current scale, offsetX, offsetY to preserve positioning
       // Don't reset them so users can fine-tune from where they left off
     }
+  };
+
+  /**
+   * Cancel crop mode and go back to the last confirmed/saved cover if one exists.
+   */
+  const handleCancelCrop = () => {
+    if (savedCroppedPreview) {
+      setCroppedPreview(savedCroppedPreview);
+      setPreview(null);
+      setPreviewLoadError(null);
+      setIsPreviewImageReady(false);
+      return;
+    }
+
+    setCroppedPreview(null);
+    setPreview(null);
+    setOriginalPreview(null);
+    setSavedCroppedPreview(null);
+    setIsLoadingInitialImage(false);
+    setIsPreviewImageReady(false);
+    setPreviewLoadError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   /**
@@ -302,6 +425,11 @@ export default function ImageUpload({
     canvas.height = cropHeight;
 
     const img = imageRef.current;
+    if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) {
+      setPreviewLoadError('The image is still loading or failed to load. Please wait a moment or reopen repositioning.');
+      return;
+    }
+
     const scaledCropWidth = cropWidth / scale;
     const scaledCropHeight = cropHeight / scale;
 
@@ -332,6 +460,13 @@ export default function ImageUpload({
     // Get base64 data and show preview
     const base64Image = canvas.toDataURL('image/jpeg', 0.95);
     setCroppedPreview(base64Image);
+    setSavedCroppedPreview(base64Image);
+    setSavedScale(scale);
+    setSavedOffsetX(offsetX);
+    setSavedOffsetY(offsetY);
+    setPreview(null);
+    setPreviewLoadError(null);
+    setIsPreviewImageReady(false);
     onImageSelect(base64Image);
   };
 
@@ -361,6 +496,7 @@ export default function ImageUpload({
                     setCroppedPreview(null);
                     setPreview(null);
                     setOriginalPreview(null);
+                    setIsLoadingInitialImage(false);
                     if (fileInputRef.current) fileInputRef.current.value = '';
                   }}
                 >
@@ -369,6 +505,8 @@ export default function ImageUpload({
               </div>
             </div>
           </>
+        ) : isLoadingInitialImage ? (
+          <div className="loading-placeholder">Loading saved image...</div>
         ) : !preview ? (
           <>
             {/* Drag and Drop Area */}
@@ -407,10 +545,17 @@ export default function ImageUpload({
                       ref={imageRef}
                       src={preview}
                       alt="Crop Preview"
-
                       style={{
                         transform: `scale(${scale}) translate(${offsetX}px, ${offsetY}px)`,
                         cursor: isDragPanning ? 'grabbing' : 'grab',
+                      }}
+                      onLoad={() => {
+                        setIsPreviewImageReady(true);
+                        setPreviewLoadError(null);
+                      }}
+                      onError={() => {
+                        setIsPreviewImageReady(false);
+                        setPreviewLoadError('The book cover could not be displayed for repositioning.');
                       }}
                       onMouseDown={handleMouseDown}
                     />
@@ -493,6 +638,9 @@ export default function ImageUpload({
                   <p className="instruction-text">
                     <Info size={14} /> Drag the image to position it or use arrow buttons. Use the zoom slider to adjust size.
                   </p>
+                  {previewLoadError && (
+                    <p className="instruction-text">{previewLoadError}</p>
+                  )}
                 </div>
               </div>
 
@@ -501,11 +649,7 @@ export default function ImageUpload({
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => {
-                    setCroppedPreview(null);
-                    setPreview(null);
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                  }}
+                  onClick={handleCancelCrop}
                 >
                   <X size={18} /> Cancel
                 </button>
@@ -513,6 +657,7 @@ export default function ImageUpload({
                   type="button"
                   className="btn btn-primary"
                   onClick={handleCropImage}
+                  disabled={!isPreviewImageReady}
                 >
                   <Check size={18} /> Confirm & Use Image
                 </button>

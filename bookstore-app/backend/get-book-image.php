@@ -41,6 +41,14 @@ if (!$filename) {
 // Construct file path - use basename to prevent directory traversal
 $filepath = __DIR__ . '/uploads/books/' . basename($filename);
 
+// Check if file exists before resolving the real path. Missing files should be 404, not 403.
+if (!file_exists($filepath)) {
+    http_response_code(404);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Image not found']);
+    exit;
+}
+
 // Security check - ensure file is within uploads/books directory
 $realpath = realpath($filepath);
 $uploadsDir = realpath(__DIR__ . '/uploads/books/');
@@ -52,22 +60,18 @@ if (!$realpath || strpos($realpath, $uploadsDir) !== 0) {
     exit;
 }
 
-// Check if file exists
-if (!file_exists($filepath)) {
-    http_response_code(404);
-    header('Content-Type: application/json');
-    echo json_encode(['error' => 'Image not found']);
-    exit;
-}
+// Determine MIME type without requiring the fileinfo extension
+$extension = strtolower(pathinfo($filepath, PATHINFO_EXTENSION));
+$mimeMap = [
+    'jpg' => 'image/jpeg',
+    'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    'gif' => 'image/gif',
+    'webp' => 'image/webp',
+    'bmp' => 'image/bmp',
+];
 
-// Determine MIME type
-$finfo = finfo_open(FILEINFO_MIME_TYPE);
-$mime = finfo_file($finfo, $filepath);
-finfo_close($finfo);
-
-if (!$mime) {
-    $mime = 'application/octet-stream';
-}
+$mime = $mimeMap[$extension] ?? 'application/octet-stream';
 
 // Set headers for image delivery
 header('Content-Type: ' . $mime);

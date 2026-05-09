@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
         require_once 'db.php';
+        require_once 'book-image-storage.php';
         
         // Query to get all books
         $stmt = $conn->prepare("
@@ -56,8 +57,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         // Convert price to float and stock to int
         foreach ($books as &$book) {
+            $book['book_id'] = intval($book['book_id']);
             $book['price'] = floatval($book['price']);
             $book['stock_quantity'] = intval($book['stock_quantity']);
+
+            $imageState = getBookImageState($book['book_id']);
+            $book['book_cover_original_image'] = $imageState['book_cover_original_image'];
+            $book['image_scale'] = $imageState['image_scale'];
+            $book['image_offset_x'] = $imageState['image_offset_x'];
+            $book['image_offset_y'] = $imageState['image_offset_y'];
         }
 
         // Fetch categories for each book

@@ -389,13 +389,13 @@
 }
 
 /* Books Grid */
-.books-grid {
+.books-list-section .books-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid #e5e5e5;
 }
 
-.book-card {
+.books-list-section .book-card {
   background: white;
   border-right: 1px solid #e5e5e5;
   border-bottom: 1px solid #e5e5e5;
@@ -405,16 +405,16 @@
   flex-direction: column;
 }
 
-.book-card:nth-child(4n) {
+.books-list-section .book-card:nth-child(4n) {
   border-right: none;
 }
 
-.book-card:hover {
+.books-list-section .book-card:hover {
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
   transform: translateY(-4px);
 }
 
-.book-cover-wrap {
+.books-list-section .book-cover-wrap {
   position: relative;
   display: flex;
   justify-content: center;
@@ -425,14 +425,14 @@
   overflow: hidden;
 }
 
-.book-cover-img {
+.books-list-section .book-cover-img {
   max-height: 100%;
   max-width: 100%;
   object-fit: contain;
   display: block;
 }
 
-.book-cover-empty {
+.books-list-section .book-cover-empty {
   width: 100%;
   height: 100%;
   display: flex;
@@ -442,14 +442,14 @@
   color: #ccc;
 }
 
-.book-meta {
+.books-list-section .book-meta {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 90px;
 }
 
-.book-title {
+.books-list-section .book-title {
   font-size: 0.9rem;
   font-weight: 600;
   color: #222;
@@ -461,7 +461,7 @@
   width: 100%;
 }
 
-.book-author {
+.books-list-section .book-author {
   font-size: 0.8rem;
   color: #888;
   margin: 0 0 0.4rem 0;
@@ -471,7 +471,7 @@
   width: 100%;
 }
 
-.book-price {
+.books-list-section .book-price {
   font-size: 0.95rem;
   font-weight: 700;
   color: #20365f;
@@ -777,21 +777,21 @@
     min-width: 150px;
   }
 
-  .books-grid {
+  .books-list-section .books-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
   }
 
-  .book-card {
+  .books-list-section .book-card {
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   }
 
-  .book-card:hover {
+  .books-list-section .book-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   }
 
-  .book-title {
+  .books-list-section .book-title {
     font-size: 0.9rem;
   }
 

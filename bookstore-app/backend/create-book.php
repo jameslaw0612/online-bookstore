@@ -18,6 +18,7 @@
  */
 
 require_once 'db.php';
+require_once 'book-image-storage.php';
 
 // Handle CORS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -63,7 +64,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Convert all category IDs to integers and validate
         $category_ids = array_map('intval', $category_ids);
         
-        $book_cover_image = $data['book_cover_image']; // base64 encoded image
+        $book_cover_image = $data['book_cover_image']; // Cropped base64 image
+        $book_cover_original_image = $data['book_cover_original_image'] ?? $book_cover_image;
+        $image_scale = isset($data['image_scale']) ? floatval($data['image_scale']) : 1.0;
+        $image_offset_x = isset($data['image_offset_x']) ? floatval($data['image_offset_x']) : 0.0;
+        $image_offset_y = isset($data['image_offset_y']) ? floatval($data['image_offset_y']) : 0.0;
 
         error_log("Extracted data - Title: $title, Author: $author, ISBN: $isbn, Categories: " . json_encode($category_ids));
 
@@ -83,48 +88,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          * STEP 3: Process and save book cover image
          */
         $image_filename = null;
+        $original_image_filename = null;
         
         if ($book_cover_image && strpos($book_cover_image, 'data:image') === 0) {
             error_log("Processing base64 image...");
             
-            // Extract base64 data and file type
-            preg_match('/data:image\/(\w+);base64,/', $book_cover_image, $matches);
-            $image_type = $matches[1] ?? 'jpg';
-            
-            // Extract base64 content
-            $base64_data = substr($book_cover_image, strpos($book_cover_image, ',') + 1);
-            $image_data = base64_decode($base64_data, true);
-            
-            if ($image_data === false) {
-                throw new Exception("Failed to decode base64 image data");
-            }
-            
-            // Create uploads directory if it doesn't exist
-            $uploads_dir = __DIR__ . '/uploads/books';
-            if (!is_dir($uploads_dir)) {
-                if (!mkdir($uploads_dir, 0777, true)) {
-                    throw new Exception("Failed to create uploads directory: $uploads_dir");
-                }
-                error_log("Created uploads directory: $uploads_dir");
-            }
-            
-            // Verify directory is writable
-            if (!is_writable($uploads_dir)) {
-                throw new Exception("Uploads directory is not writable: $uploads_dir");
-            }
-            
-            // Generate unique filename
-            $image_filename = 'book_' . time() . '_' . bin2hex(random_bytes(8)) . '.' . $image_type;
-            $image_path = $uploads_dir . '/' . $image_filename;
-            
-            error_log("Saving image to: $image_path");
-            
-            // Save image file
-            if (file_put_contents($image_path, $image_data) === false) {
-                throw new Exception("Failed to save book cover image to: $image_path");
-            }
-            
-            error_log("Successfully saved image: $image_filename");
+            $image_filename = saveBase64BookImage($book_cover_image, 'book');
+            $original_image_filename = saveBase64BookImage($book_cover_original_image, 'book_original');
+            error_log("Successfully saved images: cropped=$image_filename, original=$original_image_filename");
         } else {
             throw new Exception("Invalid or missing book cover image data");
         }
@@ -151,6 +122,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $book_id = $conn->lastInsertId();
         error_log("Book created with ID: $book_id");
+        setBookImageState(
+            intval($book_id),
+            $original_image_filename,
+            $image_scale,
+            $image_offset_x,
+            $image_offset_y
+        );
 
         /**
          * STEP 5: Link book to categories (multiple categories)
@@ -188,7 +166,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'price' => $price,
                 'stock_quantity' => $stock_quantity,
                 'category_ids' => $category_ids,
-                'book_cover_image' => $image_filename
+                'book_cover_image' => $image_filename,
+                'book_cover_original_image' => $original_image_filename,
+                'image_scale' => $image_scale,
+                'image_offset_x' => $image_offset_x,
+                'image_offset_y' => $image_offset_y
             ]
         ]);
 
